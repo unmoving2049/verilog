@@ -1,0 +1,46 @@
+`timescale 1ps / 1ps
+
+module clk_divider (
+    input wire rst_n,            // Active-low reset
+    input wire scl_m,            // 5 GHz Master Clock
+    input wire [1:0] config_bits,// 2-bit config for this specific port
+    output reg scl_p             // Derived Port Clock
+);
+
+    reg [9:0] counter;           
+    reg [1:0] config_bits_prev;  // Memory to detect config changes
+
+    // Professional standard: Function for combinational lookup
+    function [9:0] get_toggle_val(input [1:0] cfg);
+        case(cfg)
+            2'b00: get_toggle_val = 10'd1000; // 2.5 MHz 
+            2'b01: get_toggle_val = 10'd125;  // 20 MHz  
+            2'b10: get_toggle_val = 10'd5;    // 500 MHz 
+            2'b11: get_toggle_val = 10'd2;    // 1.25 GHz
+            default: get_toggle_val = 10'd1000;
+        endcase
+    endfunction
+
+    wire [9:0] toggle_val = get_toggle_val(config_bits);
+
+    always @(posedge scl_m or negedge rst_n) begin
+        if (!rst_n) begin
+            counter <= 0;
+            scl_p <= 0;
+            config_bits_prev <= 2'b00;
+        end else begin
+            config_bits_prev <= config_bits;
+            
+            // Instantly reset the counter on config change to avoid glitches
+            if (config_bits != config_bits_prev) begin
+                counter <= 0;
+                scl_p <= 0;
+            end else if (counter >= toggle_val - 1) begin
+                counter <= 0;
+                scl_p <= ~scl_p;
+            end else begin
+                counter <= counter + 1;
+            end
+        end
+    end
+endmodule
